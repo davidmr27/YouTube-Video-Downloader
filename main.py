@@ -1,17 +1,19 @@
 import os
-
-import requests
-from fastapi import FastAPI, Request, Form
+from pathlib import Path
+from unicodedata import name
+from fastapi import FastAPI, Request, status
 from pytube import YouTube
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import StreamingResponse, FileResponse
 from fastapi import BackgroundTasks
+from fastapi.responses import FileResponse, RedirectResponse
 import tempfile
+import uuid
 
 # https://www.studytonight.com/post/pytube-to-download-youtube-videos-with-python
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+temdir = Path.cwd() / "tmp"
 
 
 def get_all_video_mp4(link_video: str):
@@ -28,24 +30,22 @@ def get_all_video_mp4(link_video: str):
 
 
 # TODO: Hacer una seccion solo para audio
-def download_video(link_video):
+def download_video(link_video, itag):
+    global tempdir
+    dir = str(temdir)
     yt = YouTube(link_video)
-    result = yt.streams.filter(file_extension='mp4')
-    download_path = result.get_highest_resolution()
-    print(f"[INFO] -> {result}")
-    extestions = download_path.mime_type.split('/')[-1]
-    temppath = tempfile.NamedTemporaryFile(suffix='_temp.mp4', prefix='askvideo_')
-    print(download_path)
-    print(extestions)
-    _, output_path, name = temppath.name.split('/')
-    path = download_path.download(output_path=output_path, filename=name)
-    return path, name, temppath
+    download_path = yt.streams.get_by_itag(int(itag))
+    print(f"[INFO] -> {download_path}")
+    tempname = str(uuid.uuid4()) + ".mp4"
+    name = yt.title + ".mp4"
+    path = download_path.download(output_path=dir, filename=tempname)
+    return name, tempname
 
 
-def delete_file(filename, path):
-    filename.close()
-    print('File is delete')
-    os.remove(path)
+def delete_file(filename):
+    global temdir
+    print("File is delete")
+    os.unlink(str(temdir/ filename))
 
 
 @app.get("/")
@@ -53,12 +53,62 @@ async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.post("/")
-async def video(request: Request, backgroundTasks: BackgroundTasks):
+@app.post("/video")
+async def video(request: Request):
     form_data = await request.form()
-    link_video = form_data.get('url_video', None)
-    (path, name, temppath) = download_video(link_video)
-    print(form_data.get('url_video'))
-    backgroundTasks.add_task(delete_file, temppath, path)
-    return FileResponse(path=temppath.name, media_type="video/mp4",
-                        filename=name)
+    link_video = form_data.get("url_video", None)
+    itag = form_data.get("optionDownload", None)
+    print(f"[FORM]: -> {form_data}")
+    (name, tempname) = download_video(link_video, itag)
+    print(form_data.get("url_video"))
+
+    return {"name": name, "tempname": tempname}
+
+
+@app.get("/video")
+async def download(
+    tempname: str, name_video: str, request: Request, backgroundTasks: BackgroundTasks
+):
+    backgroundTasks.add_task(delete_file, tempname)
+    return FileResponse(
+        path=(temdir / tempname),
+        media_type="files/mp4",
+        filename=name_video,
+    )
+
+
+@app.post("/list_format")
+async def list_format(request: Request):
+    form_data = await request.form()
+    print(form_data)
+    link_video = form_data.get("url_video", None)
+
+    if link_video is None:
+        return {}
+    resolution = {
+        "720p": 0.0,
+        "360p": 0.0,
+        "144p": 0.0,
+    }
+    videos = resolution
+    yt = YouTube(link_video)
+    filter_video = yt.streams.filter(progressive=True)
+    for i, video in enumerate(filter_video):
+        try:
+            if video.type == "video":
+                current_size = round(video.filesize / 1024 / 1024, 2)
+                previus_size = resolution.get(video.resolution, 0.0)
+                if current_size > previus_size:
+                    resolution[video.resolution] = current_size
+                    videos[video.resolution] = {
+                        "res": video.resolution,
+                        "itag": video.itag,
+                        "size": current_size,
+                        "fps": video.fps,
+                    }
+
+        except Exception as ex:
+            # print(f"[ERROR] -> {ex}")
+            continue
+
+    return videos

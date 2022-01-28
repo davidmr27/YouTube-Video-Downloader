@@ -7,22 +7,91 @@
         content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Document</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 
 <body>
-    <form action="" method="post">
-        <input type="url" name="url_video" id="url_video" placeholder="Input url of Youtube...">
-        <button type="submit" class="btn btn-primary" id="btn_video">Iniciar</button>
-    </form>
+    <div class="cotainer">
+        <div class="card-title">
+            <h2>
+                Youtube Download Video
+            </h2>
+        </div>
+        <div class="d-flex justify-content-center align-items-center flex-column flex-grow-1">
+            <form id="formVideo">
+                <div class="input-group">
+                    <input class="form-control" type="url" name="url_video" id="url_video" placeholder="Input url of Youtube..." required>
+                    <button type="submit" class="btn btn-primary" id="btn_video">Buscar</button>
+                </div>
+                <select class="form-select" name="optionDownload" id="optionDownload">
+                    <option value=""> -- No option -- </option>
+                </select>
+            </form>
 
-    {% if format_video %}
-        <select name="" id="">
-            <option>Item 1</option>
-            <option>Item 2</option>
-            <option>Item 3</option>
-        </select>
-    {% endif %}
+            <form action="/video" method="get">
+                <input type="hidden" name="name_video" value="" id="name_video">
+                <input type="hidden" name="tempname" value="" id="tempname">
+                <button type="submit" class="btn btn-success disabled" id="download">Descargar</button>
+            </form>
+            <div class="spinner-border visually-hidden" role="status" id="loading">
+            </div>
+        </div>
+    </div>
+    </select>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        var optionDownload = document.getElementById("optionDownload");
+        let url = "/list_format";
+        let formVideo = document.getElementById("formVideo");
+        let loading = document.getElementById("loading");
+        formVideo.onsubmit = async (e) => {
+            e.preventDefault();
 
+            if (optionDownload.length > 1) {
+                optionDownload.innerHTML = ` <option value=""> -- No option -- </option>`;
+            }
+            // formVideo.innerHTML = formVideo.innerHTML + `\n<div class="spinner-border" role="status" id="wait_option"></div>`;
+            loading.classList.remove("visually-hidden");
+            let response = await fetch(url, {
+                method: 'POST',
+                body: new FormData(formVideo)
+            });
+
+            loading.classList.add("visually-hidden");
+            if (response.ok) {
+                let result = await response.json();
+                console.log(result);
+                for (key in result) {
+                    video = result[key]
+                    let option = document.createElement('option');
+                    option.className = "select";
+                    option.value = video['itag'];
+                    option.innerHTML = `${video['res']}, ${video['size']}MB, ${video['fps']}FPS `;
+                    optionDownload.appendChild(option);
+                }
+            }
+        };
+        optionDownload.addEventListener('change', async (e) => {
+            let form = document.getElementById('formVideo');
+            let formdata = new FormData(form);
+            data = {};
+            formdata.forEach((value, key) => (data[key] = value));
+            console.log(form);
+            loading.classList.remove("visually-hidden");
+            let response = await fetch("/video", {
+                method: "POST",
+                body: new FormData(form)
+            });
+            loading.classList.add("visually-hidden");
+            let download = document.getElementById('download');
+            download.classList.remove("disabled");
+            let result = await response.json();
+            let tempname = document.getElementById("tempname");
+            tempname.value = result.tempname;
+            let name_video = document.getElementById("name_video");
+            name_video.value = result.name;
+        })
+    </script>
 </body>
 
 </html>
