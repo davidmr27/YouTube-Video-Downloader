@@ -7,7 +7,6 @@ from fastapi.templating import Jinja2Templates
 from fastapi import BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-import tempfile
 import uuid
 
 # https://www.studytonight.com/post/pytube-to-download-youtube-videos-with-python
