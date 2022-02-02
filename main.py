@@ -5,32 +5,30 @@ from fastapi import FastAPI, Request, status
 from pytube import YouTube
 from fastapi.templating import Jinja2Templates
 from fastapi import BackgroundTasks
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import tempfile
 import uuid
 
 # https://www.studytonight.com/post/pytube-to-download-youtube-videos-with-python
+# https://github.com/pytube/pytube/issues/1218
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 templates = Jinja2Templates(directory="templates")
 temdir = Path.cwd() / "tmp"
 
-
-def get_all_video_mp4(link_video: str):
-    pass
-
-    # TODO: Hacer una seccion solo para videos MP4
-    """
-        TODO: Listar las calidades disponibles del video
-        TODO: Seleccionar todos los videos en mp4
-        TODO: Filtrar los videos que tenga un type Nope
-        TODO: Seleccionar un video especifico
-        TODO: descargar el video en el ordenador
-    """
-
-
-# TODO: Hacer una seccion solo para audio
 def download_video(link_video, itag):
+    """[summary]
+
+    Args:
+        link_video ([str]): [url of video]
+        itag ([int]): [itag is id of video select]
+
+    Returns:
+        [(name,tempname)]: [return name of video and temporal name]
+    """
     global tempdir
     dir = str(temdir)
     yt = YouTube(link_video)
@@ -39,26 +37,46 @@ def download_video(link_video, itag):
     tempname = str(uuid.uuid4()) + ".mp4"
     name = yt.title + ".mp4"
     path = download_path.download(output_path=dir, filename=tempname)
-    return name, tempname
+    return (name, tempname)
 
 
 def delete_file(filename):
+    """[Delete file with temporal name]
+
+    Args:
+        filename ([str]): [temporal name of video]
+    """
     global temdir
+    os.unlink(str(temdir / filename))
     print("File is delete")
-    os.unlink(str(temdir/ filename))
 
 
 @app.get("/")
 async def home(request: Request):
+    """[Route main to show template to download video]
+
+    Args:
+        request (Request): [description]
+
+    Returns:
+        [type]: [description]
+    """
     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.post("/video")
 async def video(request: Request):
+    """[summary]
+
+    Args:
+        request (Request): [description]
+
+    Returns:
+        [type]: [description]
+    """
     form_data = await request.form()
     link_video = form_data.get("url_video", None)
     itag = form_data.get("optionDownload", None)
-    print(f"[FORM]: -> {form_data}")
     (name, tempname) = download_video(link_video, itag)
     print(form_data.get("url_video"))
 
@@ -69,6 +87,17 @@ async def video(request: Request):
 async def download(
     tempname: str, name_video: str, request: Request, backgroundTasks: BackgroundTasks
 ):
+    """[summary]
+
+    Args:
+        tempname (str): [temporal name]
+        name_video (str): [name of video]
+        request (Request): [description]
+        backgroundTasks (BackgroundTasks): [class to exec proccess in background to delete file]
+
+    Returns:
+        [type]: [description]
+    """
     backgroundTasks.add_task(delete_file, tempname)
     return FileResponse(
         path=(temdir / tempname),
@@ -79,8 +108,15 @@ async def download(
 
 @app.post("/list_format")
 async def list_format(request: Request):
+    """[Select the video qualities which work for downloading and return a json of the options. ]
+
+    Args:
+        request (Request): [form input send client]
+
+    Returns:
+        [dict]: [dict of video qualities]
+    """
     form_data = await request.form()
-    print(form_data)
     link_video = form_data.get("url_video", None)
 
     if link_video is None:
@@ -108,7 +144,6 @@ async def list_format(request: Request):
                     }
 
         except Exception as ex:
-            # print(f"[ERROR] -> {ex}")
             continue
 
     return videos
